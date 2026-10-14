@@ -1,4 +1,5 @@
-import { parseBasePlate } from './basePlate.js';
+import { parseBasePlate } from './basePlate.js?v=obj-loaders-20261014';
+import { parseReferenceObj } from './referenceObj.js?v=obj-loaders-20261014';
 
 let SHEET = 304.8;
 let CLAMP = 57.4;
@@ -18,6 +19,8 @@ let topMap = null;
 let topDrag = false;
 let formDrag = null;
 let drawQueued = false; 
+let baseRequest = 0;
+let referenceRequest = 0;
 
 function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
 function axis(step) {
@@ -397,56 +400,97 @@ function exportCsv() {
   state.csvPoints.forEach((p,i) => rows.push([i,p.x.toFixed(4),p.y.toFixed(4),p.z.toFixed(4),p.move].join(',')));
   download('sheetformer_wrist_preview_NOT_ROBOT_READY.csv', rows.join('\n') + '\n', 'text/csv');
 }
+function applyReference(text, name) {
+  const { points, bounds } = parseReferenceObj(text);
+  state.hand = points;
+  state.handBounds = bounds;
+  const custom = !name.startsWith('Default:');
+  $('reference-legend').textContent = custom ? '○ object reference' : '○ hand scan reference';
+  $('reference-scale-label').textContent = custom ? 'Object scale' : 'Hand scale';
+  $('reference-note').textContent = custom
+    ? 'The grey points show the loaded OBJ as a visual reference only. Its units are unspecified; check its scale before fabrication.'
+    : 'The grey points show the complete hand OBJ as a visual reference only. Its units are unspecified; check the scale against a measured wrist before fabrication.';
+  const label = $('object-file-status');
+  label.textContent = `${name} · ${points.length.toLocaleString()} preview vertices`;
+  label.classList.remove('error');
+  updateReadouts(); scheduleDraw();
+}
+function applyBase(text, name) {
+  const base = parseBasePlate(text);
+  SHEET = base.sheet;
+  CLAMP = base.clamp;
+  state.baseLoaded = true;
+  state.baseError = null;
+  const formableWidth = SHEET - 2 * CLAMP;
+  for (const id of ['width', 'length']) {
+    $(id).max = formableWidth.toFixed(1);
+    $(id).value = Math.min(+$(id).value, formableWidth).toFixed(1);
+  }
+  for (const id of ['target-x', 'target-y']) {
+    $(id).min = CLAMP.toFixed(1);
+    $(id).max = (SHEET - CLAMP).toFixed(1);
+    $(id).value = clamp(+$(id).value, CLAMP, SHEET - CLAMP).toFixed(1);
+  }
+  $('sheet-size').textContent = `${SHEET.toFixed(1)} × ${SHEET.toFixed(1)} MM`;
+  $('clamp-readout').textContent = `The loaded base OBJ sets a ${CLAMP.toFixed(1)} mm flat clamping border. Click inside the top view to select its central face.`;
+  const label = $('base-file-status');
+  label.textContent = name;
+  label.classList.remove('error');
+  readControls();
+}
 async function loadHand() {
+  const request = ++referenceRequest;
   try {
     const response = await fetch('../../references/3D/HAND_clean_mesh.obj');
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const text = await response.text();
-    const hand = [];
-    const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
-    for (const line of text.split(/\r?\n/)) {
-      if (!line.startsWith('v ')) continue;
-      const parts = line.trim().split(/\s+/);
-      const v = [+parts[1],+parts[2],+parts[3]];
-      if (v.some(x => !Number.isFinite(x))) continue;
-      hand.push(v);
-      bounds.minX = Math.min(bounds.minX,v[0]); bounds.maxX = Math.max(bounds.maxX,v[0]);
-      bounds.minY = Math.min(bounds.minY,v[1]); bounds.maxY = Math.max(bounds.maxY,v[1]);
-      bounds.minZ = Math.min(bounds.minZ,v[2]); bounds.maxZ = Math.max(bounds.maxZ,v[2]);
-    }
-    state.hand = hand; state.handBounds = bounds;
-    updateReadouts(); scheduleDraw();
+    if (request === referenceRequest) applyReference(text, 'Default: HAND_clean_mesh.obj');
   } catch (error) {
+    if (request !== referenceRequest) return;
     $('status').textContent = 'Hand reference unavailable: ' + error.message;
     $('status').classList.add('warn');
   }
 }
 async function loadBase() {
+  const request = ++baseRequest;
   try {
     const response = await fetch('../../references/3D/basePlate.obj');
     if (!response.ok) throw new Error('HTTP ' + response.status);
-    const base = parseBasePlate(await response.text());
-    SHEET = base.sheet;
-    CLAMP = base.clamp;
-    state.baseLoaded = true;
-    const formableWidth = SHEET - 2 * CLAMP;
-    for (const id of ['width', 'length']) {
-      $(id).max = formableWidth.toFixed(1);
-      $(id).value = Math.min(+$(id).value, formableWidth).toFixed(1);
-    }
-    for (const id of ['target-x', 'target-y']) {
-      $(id).min = CLAMP.toFixed(1);
-      $(id).max = (SHEET - CLAMP).toFixed(1);
-      $(id).value = clamp(+$(id).value, CLAMP, SHEET - CLAMP).toFixed(1);
-    }
-    $('clamp-readout').textContent = `The supplied base OBJ sets a ${CLAMP.toFixed(1)} mm flat clamping border. Click inside the top view to select its central face.`;
-    readControls();
+    const text = await response.text();
+    if (request === baseRequest) applyBase(text, 'Default: basePlate.obj');
   } catch (error) {
+    if (request !== baseRequest) return;
     state.baseError = error.message;
     updateReadouts();
   }
 }
+async function selectedObj(file, kind) {
+  if (!file) return;
+  const isBase = kind === 'base';
+  const request = isBase ? ++baseRequest : ++referenceRequest;
+  const label = $(isBase ? 'base-file-status' : 'object-file-status');
+  try {
+    if (!/\.obj$/i.test(file.name)) throw new Error('Choose an .obj file');
+    if (file.size > 50 * 1024 * 1024) throw new Error('OBJ exceeds the 50 MB preview limit');
+    const text = await file.text();
+    if (request !== (isBase ? baseRequest : referenceRequest)) return;
+    if (isBase) applyBase(text, file.name);
+    else applyReference(text, file.name);
+  } catch (error) {
+    if (request !== (isBase ? baseRequest : referenceRequest)) return;
+    label.textContent = `${file.name}: ${error.message}. Previous OBJ kept.`;
+    label.classList.add('error');
+  }
+}
 controls.forEach(id => $(id).addEventListener('input', readControls));
+$('load-base-button').addEventListener('click', () => $('base-file').click());
+$('load-object-button').addEventListener('click', () => $('object-file').click());
+for (const kind of ['base', 'object']) {
+  $(`${kind}-file`).addEventListener('change', event => {
+    selectedObj(event.target.files[0], kind);
+    event.target.value = '';
+  });
+}
 $('export-obj').addEventListener('click', exportObj);
 $('export-csv').addEventListener('click', exportCsv);
 topCanvas.addEventListener('pointerdown', (event) => {

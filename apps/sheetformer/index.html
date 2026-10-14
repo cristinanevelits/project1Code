@@ -24,24 +24,30 @@
       <div class="views">
         <div class="view-head"><span>FORM PREVIEW <small>drag to orbit</small></span><span id="mesh-readout">—</span></div>
         <canvas id="form-view" aria-label="Perspective preview of the formed sheet and hand reference"></canvas>
-        <div class="view-footer"><span>● formed sheet</span><span>○ hand scan reference</span><span>— selected toolpath</span></div>
-        <div class="view-head secondary"><span>TOP / TARGET PLACEMENT <small>drag orange point</small></span><span>304.8 × 304.8 MM</span></div>
+        <div class="view-footer"><span>● formed sheet</span><span id="reference-legend">○ hand scan reference</span><span>— selected toolpath</span></div>
+        <div class="view-head secondary"><span>TOP / TARGET PLACEMENT <small>drag orange point</small></span><span id="sheet-size">304.8 × 304.8 MM</span></div>
         <canvas id="top-view" aria-label="Top view showing clamp zone and draggable form target"></canvas>
-        <p class="canvas-note">The grey points show the complete hand OBJ as a visual reference only. Its units are unspecified; check the scale against a measured wrist before fabrication.</p>
+        <p class="canvas-note" id="reference-note">The grey points show the complete hand OBJ as a visual reference only. Its units are unspecified; check the scale against a measured wrist before fabrication.</p>
       </div>
       <aside class="controls">
         <div class="panel-title"><span>PARAMETERS</span><span>( EDITABLE )</span></div>
         <div class="status" id="status">Loading geometry…</div>
         <fieldset>
           <legend>01 / REFERENCE</legend>
-          <label class="row"><span>Hand scale</span><output id="hand-scale-value">21.8 mm/unit</output></label>
+          <label class="row"><span id="reference-scale-label">Hand scale</span><output id="hand-scale-value">21.8 mm/unit</output></label>
           <input id="hand-scale" type="range" min="5" max="40" step="0.1" value="21.8">
           <p class="hint">Display alignment only. The source OBJ declares no units.</p>
           <label class="row"><span>Reference visibility</span><input id="show-hand" type="checkbox" checked></label>
+          <button class="load-obj" id="load-object-button" type="button">LOAD OBJECT OBJ</button>
+          <input class="file-input" id="object-file" type="file" accept=".obj" aria-label="Choose an OBJ reference object">
+          <p class="hint file-status" id="object-file-status" role="status">Default: HAND_clean_mesh.obj</p>
         </fieldset>
         <fieldset>
           <legend>02 / FORMABLE FACE</legend>
           <p class="hint" id="clamp-readout">Loading the base mesh clamp boundary…</p>
+          <button class="load-obj" id="load-base-button" type="button">LOAD BASE PLATE OBJ</button>
+          <input class="file-input" id="base-file" type="file" accept=".obj" aria-label="Choose an OBJ base plate">
+          <p class="hint file-status" id="base-file-status" role="status">Default: basePlate.obj</p>
           <label class="row"><span>Target edge length</span><output id="edge-value">10 mm</output></label>
           <input id="edge" type="range" min="4" max="20" step="1" value="10">
           <label class="row"><span>Active face</span><strong id="face-value">CENTRAL</strong></label>
@@ -80,6 +86,6 @@
       </aside>
     </section>
   </main>
-  <script type="module" src="./app.js?v=base-57-4"></script>
+  <script type="module" src="./app.js?v=obj-loaders-20261014"></script>
 </body>
 </html>

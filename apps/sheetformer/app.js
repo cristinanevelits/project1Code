@@ -3,11 +3,11 @@ const CLAMP = 20;
 const $ = (id) => document.getElementById(id);
 const formCanvas = $('form-view');
 const topCanvas = $('top-view');
-const controls = ['hand-scale', 'show-hand', 'edge', 'depth', 'width', 'length', 'angle', 'target-x', 'target-y', 'step', 'show-path'];
+const controls = ['hand-scale', 'show-hand', 'edge', 'fold-style', 'depth', 'width', 'length', 'angle', 'target-x', 'target-y', 'step', 'show-path'];
 const state = {
   handScale: 25.4, showHand: true, edge: 8, depth: 24, width: 110,
   length: 145, angle: 45, targetX: 152.4, targetY: 92,
-  step: 0.5, showPath: true, faceSelected: true,
+  foldStyle: 'faceted', step: 0.5, showPath: true, faceSelected: true,
   yaw: -0.65, pitch: 0.60, hand: [], handBounds: null,
   axes: [], vertices: [], faces: [], contours: [], csvPoints: [],
   maxSlope: 0
@@ -24,14 +24,55 @@ function axis(step) {
   values.push(SHEET - CLAMP, SHEET);
   return values;
 }
-function zAt(x, y) {
-  if (!state.faceSelected || x <= CLAMP || y <= CLAMP || x >= SHEET - CLAMP || y >= SHEET - CLAMP) return 0;
+// Keep the previous rounded form intact so the user can switch back immediately.
+function smoothZAt(x, y) {
   const dx = (x - state.targetX) / (state.width / 2);
   const dy = (y - state.targetY) / (state.length / 2);
   const influence = Math.exp(-0.5 * (dx * dx + dy * dy));
   const edge = clamp(Math.min(x - CLAMP, y - CLAMP, SHEET - CLAMP - x, SHEET - CLAMP - y) / 22, 0, 1);
   const taper = edge * edge * (3 - 2 * edge);
   return -state.depth * influence * taper;
+}
+// A small irregular triangle net gives the wrist depression distinct pleats.
+// Each height is a fraction of the selected depth; the perimeter stays flat.
+const foldRows = [
+  { v: -1,   u: [-1, -.55, 0, .55, 1],       h: [0, 0, 0, 0, 0] },
+  { v: -.52, u: [-1, -.58, -.12, .48, 1],   h: [0, .17, .72, .22, 0] },
+  { v: 0,    u: [-1, -.47, .07, .57, 1],     h: [0, .30, 1, .20, 0] },
+  { v: .52,  u: [-1, -.55, -.09, .47, 1],   h: [0, .12, .75, .25, 0] },
+  { v: 1,    u: [-1, -.55, 0, .55, 1],       h: [0, 0, 0, 0, 0] }
+];
+function foldVertex(row, col) {
+  const r = foldRows[row];
+  return { u: r.u[col], v: r.v, h: r.h[col] };
+}
+function triangleHeight(u, v, a, b, c) {
+  const det = (b.v - c.v) * (a.u - c.u) + (c.u - b.u) * (a.v - c.v);
+  const wa = ((b.v - c.v) * (u - c.u) + (c.u - b.u) * (v - c.v)) / det;
+  const wb = ((c.v - a.v) * (u - c.u) + (a.u - c.u) * (v - c.v)) / det;
+  const wc = 1 - wa - wb;
+  return Math.min(wa, wb, wc) >= -1e-8 ? wa * a.h + wb * b.h + wc * c.h : null;
+}
+function facetedZAt(x, y) {
+  const u = (x - state.targetX) / (state.width / 2);
+  const v = (y - state.targetY) / (state.length / 2);
+  if (Math.abs(u) >= 1 || Math.abs(v) >= 1) return 0;
+  for (let row = 0; row < foldRows.length - 1; row++) {
+    if (v < foldRows[row].v || v > foldRows[row + 1].v) continue;
+    for (let col = 0; col < 4; col++) {
+      const a = foldVertex(row, col), b = foldVertex(row, col + 1);
+      const c = foldVertex(row + 1, col + 1), d = foldVertex(row + 1, col);
+      const first = triangleHeight(u, v, a, b, c);
+      if (first !== null) return -state.depth * first;
+      const second = triangleHeight(u, v, a, c, d);
+      if (second !== null) return -state.depth * second;
+    }
+  }
+  return 0;
+}
+function zAt(x, y) {
+  if (!state.faceSelected || x <= CLAMP || y <= CLAMP || x >= SHEET - CLAMP || y >= SHEET - CLAMP) return 0;
+  return state.foldStyle === 'faceted' ? facetedZAt(x, y) : smoothZAt(x, y);
 }
 function mesh() {
   const ax = axis(state.edge);

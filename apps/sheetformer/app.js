@@ -15,7 +15,7 @@ const state = {
 let topMap = null;
 let topDrag = false;
 let formDrag = null;
-let drawQueued = false;
+let drawQueued = false; 
 
 function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
 function axis(step) {
@@ -33,6 +33,7 @@ function smoothZAt(x, y) {
   const taper = edge * edge * (3 - 2 * edge);
   return -state.depth * influence * taper;
 }
+
 // A small irregular triangle net gives the wrist depression distinct pleats.
 // Each height is a fraction of the selected depth; the perimeter stays flat.
 const foldRows = [

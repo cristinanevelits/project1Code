@@ -41,7 +41,7 @@
         </fieldset>
         <fieldset>
           <legend>02 / FORMABLE FACE</legend>
-          <p class="hint">Click inside the top view to select the central face. The outer 20 mm stays flat for clamping.</p>
+          <p class="hint" id="clamp-readout">Loading the base mesh clamp boundary…</p>
           <label class="row"><span>Target edge length</span><output id="edge-value">10 mm</output></label>
           <input id="edge" type="range" min="4" max="20" step="1" value="10">
           <label class="row"><span>Active face</span><strong id="face-value">CENTRAL</strong></label>
@@ -56,12 +56,12 @@
           <label class="row"><span>Depth below sheet</span><output id="depth-value">42.5 mm</output></label>
           <input id="depth" type="range" min="2" max="70" step="0.5" value="42.5">
           <label class="row"><span>Across-wrist width</span><output id="width-value">188 mm</output></label>
-          <input id="width" type="range" min="35" max="200" step="1" value="188">
-          <label class="row"><span>Along-wrist length</span><output id="length-value">209 mm</output></label>
-          <input id="length" type="range" min="45" max="250" step="1" value="209">
+          <input id="width" type="range" min="35" max="190" step="1" value="188">
+          <label class="row"><span>Along-wrist length</span><output id="length-value">188 mm</output></label>
+          <input id="length" type="range" min="45" max="190" step="1" value="188">
           <label class="row"><span>Maximum face angle</span><output id="angle-value">45°</output></label>
           <input id="angle" type="range" min="15" max="60" step="1" value="45">
-          <div class="coordinate"><label>Target X <input id="target-x" type="number" min="20" max="284.8" step="0.1" value="152.9"></label><label>Target Y <input id="target-y" type="number" min="20" max="284.8" step="0.1" value="151.4"></label></div>
+          <div class="coordinate"><label>Target X <input id="target-x" type="number" min="57.4" max="247.4" step="0.1" value="152.9"></label><label>Target Y <input id="target-y" type="number" min="57.4" max="247.4" step="0.1" value="151.4"></label></div>
           <p class="hint">The pleated option uses angular facets and crease lines. Choose “Original smooth shape” to restore the rounded form. Both remain design previews, not robot-ready paths.</p>
         </fieldset>
         <fieldset>

@@ -1,16 +1,18 @@
-const SHEET = 304.8;
-const CLAMP = 20;
+import { parseBasePlate } from './basePlate.js';
+
+let SHEET = 304.8;
+let CLAMP = 57.4;
 const $ = (id) => document.getElementById(id);
 const formCanvas = $('form-view');
 const topCanvas = $('top-view');
 const controls = ['hand-scale', 'show-hand', 'edge', 'fold-style', 'depth', 'width', 'length', 'angle', 'target-x', 'target-y', 'step', 'show-path'];
 const state = {
   handScale: 21.8, showHand: true, edge: 10, depth: 42.5, width: 188,
-  length: 209, angle: 45, targetX: 152.9, targetY: 151.4,
+  length: 188, angle: 45, targetX: 152.9, targetY: 151.4,
   foldStyle: 'faceted', step: 0.5, showPath: true, faceSelected: true,
   yaw: -1.02, pitch: 0.41, hand: [], handBounds: null,
   axes: [], vertices: [], faces: [], contours: [], csvPoints: [],
-  maxSlope: 0
+  maxSlope: 0, baseLoaded: false, baseError: null
 };
 let topMap = null;
 let topDrag = false;
@@ -195,7 +197,13 @@ function updateReadouts() {
   $('face-value').textContent = state.faceSelected ? 'CENTRAL' : 'NONE';
   $('path-readout').textContent = state.contours.length + ' contour loops · ' + state.csvPoints.length.toLocaleString() + ' ordered path points';
   const status = $('status');
-  if (!state.hand.length) {
+  if (state.baseError) {
+    status.textContent = 'Base mesh unavailable: ' + state.baseError + '. Showing the 57.4 mm fallback inset.';
+    status.classList.add('warn');
+  } else if (!state.baseLoaded) {
+    status.textContent = 'Loading base mesh…';
+    status.classList.remove('warn');
+  } else if (!state.hand.length) {
     status.textContent = 'Loading hand reference…';
     status.classList.remove('warn');
   } else if (!state.faceSelected) {
@@ -370,7 +378,7 @@ function drawTop() {
   ctx.fillStyle = '#ff6a3d'; ctx.beginPath(); ctx.arc(target.x,target.y,7,0,Math.PI*2); ctx.fill();
   ctx.strokeStyle = '#141414'; ctx.lineWidth = 2; ctx.stroke();
   ctx.fillStyle = '#eeebe5'; ctx.font = '10px ui-monospace, monospace';
-  ctx.fillText('FIXED 20 MM CLAMP', ox + 5, oy + 13);
+  ctx.fillText(`FIXED ${CLAMP.toFixed(1)} MM CLAMP`, ox + 5, oy + 13);
 }
 function download(name, text, mime) {
   const blob = new Blob([text], { type: mime });
@@ -413,6 +421,31 @@ async function loadHand() {
     $('status').classList.add('warn');
   }
 }
+async function loadBase() {
+  try {
+    const response = await fetch('../../references/3D/basePlate.obj');
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const base = parseBasePlate(await response.text());
+    SHEET = base.sheet;
+    CLAMP = base.clamp;
+    state.baseLoaded = true;
+    const formableWidth = SHEET - 2 * CLAMP;
+    for (const id of ['width', 'length']) {
+      $(id).max = formableWidth.toFixed(1);
+      $(id).value = Math.min(+$(id).value, formableWidth).toFixed(1);
+    }
+    for (const id of ['target-x', 'target-y']) {
+      $(id).min = CLAMP.toFixed(1);
+      $(id).max = (SHEET - CLAMP).toFixed(1);
+      $(id).value = clamp(+$(id).value, CLAMP, SHEET - CLAMP).toFixed(1);
+    }
+    $('clamp-readout').textContent = `The supplied base OBJ sets a ${CLAMP.toFixed(1)} mm flat clamping border. Click inside the top view to select its central face.`;
+    readControls();
+  } catch (error) {
+    state.baseError = error.message;
+    updateReadouts();
+  }
+}
 controls.forEach(id => $(id).addEventListener('input', readControls));
 $('export-obj').addEventListener('click', exportObj);
 $('export-csv').addEventListener('click', exportCsv);
@@ -452,4 +485,5 @@ formCanvas.addEventListener('pointerup', () => { formDrag = null; });
 formCanvas.addEventListener('pointercancel', () => { formDrag = null; });
 window.addEventListener('resize', scheduleDraw);
 readControls();
+loadBase();
 loadHand();

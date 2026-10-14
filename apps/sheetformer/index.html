@@ -84,7 +84,7 @@
           <label class="row"><span>Maximum face angle</span><output id="angle-value">45°</output></label>
           <input id="angle" type="range" min="15" max="60" step="1" value="45">
           <div class="coordinate"><label>Target X <input id="target-x" type="number" min="57.4" max="247.4" step="0.1" value="152.9"></label><label>Target Y <input id="target-y" type="number" min="57.4" max="247.4" step="0.1" value="151.4"></label></div>
-          <p class="hint">Each T marker is a projected vertex from the loaded OBJ. The matching vertex is highlighted on the floating reference, and each point adds a local push into the original basin. This remains a design preview, not a robot-ready path.</p>
+          <p class="hint">Each T marker is a projected vertex from the loaded OBJ. Its triangular sheet tip moves with that vertex; adding points adds more facets. This remains a design preview, not a robot-ready path.</p>
         </fieldset>
         <fieldset>
           <legend>04 / TOOLPATH PREVIEW</legend>
@@ -114,6 +114,7 @@
           <div class="metric"><span>Clamp inset</span><strong id="stat-clamp">57.4 mm</strong></div>
         </div>
         <div class="metric-group"><h2>03 / FORM</h2>
+          <div class="metric"><span>Sheet triangles</span><strong id="stat-sheet-faces">—</strong></div>
           <div class="metric"><span>Max depth</span><strong id="stat-depth">—</strong></div>
           <div class="metric"><span>Max face angle</span><strong id="stat-angle">—</strong></div>
           <div class="metric"><span>Angle setting</span><strong id="stat-limit">45°</strong></div>

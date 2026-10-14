@@ -1,6 +1,7 @@
 import { parseBasePlate } from './basePlate.js?v=obj-loaders-20261014';
 import { parseReferenceObj } from './referenceObj.js?v=obj-loaders-20261014';
 import { buildObjectField, sampleObjectField, chooseIndentTargets, reprojectIndentTargets } from './objectForm.js';
+import { insertTipVertices } from './tipMesh.js';
 
 let SHEET = 304.8;
 let CLAMP = 57.4;
@@ -16,7 +17,7 @@ const state = {
   yaw: -1.02, pitch: 0.41, hand: [], handBounds: null,
   objectMesh: null, objectField: null, fieldKey: '', fieldError: null, indentTargets: [],
   indentSourceIndices: [], indentSelectionKey: '', objectName: 'Loading…',
-  axes: [], vertices: [], faces: [], contours: [], csvPoints: [],
+  axes: [], vertices: [], faces: [], faceCells: [], tipCells: new Set(), removedCells: new Set(), tipVertexIndices: [], contours: [], csvPoints: [],
   maxSlope: 0, baseLoaded: false, baseError: null
 };
 let topMap = null;
@@ -160,6 +161,7 @@ function mesh() {
   const n = ax.length;
   state.vertices = [];
   state.faces = [];
+  state.faceCells = [];
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const x = ax[i], y = ax[j];
@@ -170,8 +172,16 @@ function mesh() {
     for (let i = 0; i < n - 1; i++) {
       const a = j * n + i, b = a + 1, d = a + n, c = d + 1;
       state.faces.push([a, b, c], [a, c, d]);
+      state.faceCells.push(j * (n - 1) + i, j * (n - 1) + i);
     }
   }
+  const tips = state.formDriver === 'object' && state.faceSelected
+    ? insertTipVertices(state.vertices, state.faces, state.faceCells,
+      state.indentTargets.map(target => ({ x: target.x, y: target.y, z: zAt(target.x, target.y) })), ax)
+    : { tipVertexIndices: [], tipCells: new Set(), removedCells: new Set() };
+  state.tipVertexIndices = tips.tipVertexIndices;
+  state.tipCells = tips.tipCells;
+  state.removedCells = tips.removedCells;
   let maxSlope = 0;
   for (const [ia, ib, ic] of state.faces) {
     const a = state.vertices[ia], b = state.vertices[ib], c = state.vertices[ic];
@@ -196,8 +206,6 @@ function contours() {
   state.contours = [];
   state.csvPoints = [];
   if (!state.faceSelected) return;
-  const ax = state.axes, n = ax.length;
-  const vertex = (i, j) => state.vertices[j * n + i];
   const minZ = Math.min(...state.vertices.map(v => v.z));
   for (let level = -state.step; level > minZ + state.step * 0.25; level -= state.step) {
     const segments = [];
@@ -211,13 +219,10 @@ function contours() {
         adjacency.get(key).push(index);
       }
     };
-    for (let j = 0; j < n - 1; j++) {
-      for (let i = 0; i < n - 1; i++) {
-        const p = [vertex(i, j), vertex(i + 1, j), vertex(i + 1, j + 1), vertex(i, j + 1)];
-        const hits = [[0, 1], [1, 2], [2, 3], [3, 0]].map(([a, b]) => edgeCross(p[a], p[b], level)).filter(Boolean);
-        if (hits.length === 2) add(hits[0], hits[1]);
-        else if (hits.length === 4) { add(hits[0], hits[1]); add(hits[2], hits[3]); }
-      }
+    for (const face of state.faces) {
+      const p = face.map(index => state.vertices[index]);
+      const hits = [[0, 1], [1, 2], [2, 0]].map(([a, b]) => edgeCross(p[a], p[b], level)).filter(Boolean);
+      if (hits.length === 2) add(hits[0], hits[1]);
     }
     for (const segment of segments) {
       if (segment.used) continue;
@@ -295,6 +300,7 @@ function updateReadouts() {
   $('stat-targets').textContent = state.formDriver === 'manual' ? '1 manual' : `${state.indentTargets.length} / ${state.indentCount}`;
   $('stat-area').textContent = state.objectField ? `${(state.objectField.footprint / 100).toFixed(1)} cm²` : '—';
   $('stat-clamp').textContent = `${CLAMP.toFixed(1)} mm`;
+  $('stat-sheet-faces').textContent = state.faces.length.toLocaleString();
   $('stat-depth').textContent = `${maxDepth.toFixed(1)} mm`;
   $('stat-angle').textContent = `${state.maxSlope.toFixed(1)}°`;
   $('stat-limit').textContent = `${state.angle}°`;
@@ -402,22 +408,40 @@ function drawForm() {
   for (let y = 0; y < h; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
   const cells = [];
   const n = state.axes.length;
+  const tipFacesByCell = new Map();
+  for (let index = 0; index < state.faces.length; index++) {
+    const cell = state.faceCells[index];
+    if (!state.tipCells.has(cell)) continue;
+    if (!tipFacesByCell.has(cell)) tipFacesByCell.set(cell, []);
+    tipFacesByCell.get(cell).push(state.faces[index]);
+  }
   for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) {
     const a = state.vertices[j * n + i], b = state.vertices[j * n + i + 1];
     const d = state.vertices[(j + 1) * n + i], c = state.vertices[(j + 1) * n + i + 1];
-    const world = [a, b, c, d];
-    const points = world.map(p => project(p.x, p.y, p.z, w, h));
-    const gx = (b.z - a.z) / (b.x - a.x);
-    const gy = (d.z - a.z) / (d.y - a.y);
-    cells.push({ points, z: (a.z + b.z + c.z + d.z) / 4, light: gx * 42 - gy * 32,
-      order: points.reduce((sum, p) => sum + p.y, 0) / 4 });
+    const cellIndex = j * (n - 1) + i;
+    const tipFaces = tipFacesByCell.get(cellIndex);
+    if (state.removedCells.has(cellIndex) && !tipFaces) continue;
+    const polygons = tipFaces
+      ? tipFaces.map(face => face.map(index => state.vertices[index]))
+      : [[a, b, c, d]];
+    for (const world of polygons) {
+      const points = world.map(p => project(p.x, p.y, p.z, w, h));
+      const [p, q, r] = world;
+      const det = (q.x - p.x) * (r.y - p.y) - (r.x - p.x) * (q.y - p.y);
+      const gx = Math.abs(det) < 1e-9 ? 0 : ((q.z - p.z) * (r.y - p.y) - (r.z - p.z) * (q.y - p.y)) / det;
+      const gy = Math.abs(det) < 1e-9 ? 0 : ((q.x - p.x) * (r.z - p.z) - (r.x - p.x) * (q.z - p.z)) / det;
+      cells.push({ points, z: world.reduce((sum, vertex) => sum + vertex.z, 0) / world.length,
+        light: gx * 42 - gy * 32, tip: Boolean(tipFaces),
+        order: points.reduce((sum, point) => sum + point.y, 0) / points.length });
+    }
   }
   cells.sort((a, b) => a.order - b.order);
   ctx.lineWidth = .65;
   for (const cell of cells) {
     const directional = state.foldStyle === 'faceted' ? clamp(cell.light, -30, 30) : 0;
     const shade = Math.round(69 + clamp(-cell.z / Math.max(1, state.depth), 0, 1) * 53 + directional);
-    const grid = state.foldStyle === 'faceted' ? 'rgba(238,235,229,.055)' : 'rgba(238,235,229,.13)';
+    const grid = cell.tip ? 'rgba(238,235,229,.4)'
+      : state.foldStyle === 'faceted' ? 'rgba(238,235,229,.055)' : 'rgba(238,235,229,.13)';
     polygon(ctx, cell.points, `rgb(${shade},${shade + 1},${shade + 2})`, grid);
   }
   drawCreases(ctx, p => project(p.x, p.y, p.z + 1, w, h), .55);
@@ -496,6 +520,15 @@ function drawTop() {
     }
   }
   drawCreases(ctx, p => map(p.x, p.y), .38);
+  ctx.strokeStyle = 'rgba(238,235,229,.36)';
+  ctx.lineWidth = 1;
+  for (let index = 0; index < state.faces.length; index++) {
+    if (!state.tipCells.has(state.faceCells[index])) continue;
+    polygon(ctx, state.faces[index].map(vertex => {
+      const point = state.vertices[vertex];
+      return map(point.x, point.y);
+    }), null, ctx.strokeStyle);
+  }
   if (state.showPath) {
     ctx.strokeStyle = state.foldStyle === 'faceted' ? 'rgba(255,106,61,.18)' : 'rgba(255,106,61,.35)';
     ctx.lineWidth = 1;

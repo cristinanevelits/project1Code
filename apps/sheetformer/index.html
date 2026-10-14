@@ -48,6 +48,11 @@
         </fieldset>
         <fieldset>
           <legend>03 / FOLD TARGET</legend>
+          <label class="row" for="fold-style"><span>Fold language</span></label>
+          <select id="fold-style" aria-label="Fold language">
+            <option value="faceted" selected>Triangulated pleats</option>
+            <option value="smooth">Smooth previous version</option>
+          </select>
           <label class="row"><span>Depth below sheet</span><output id="depth-value">24 mm</output></label>
           <input id="depth" type="range" min="2" max="70" step="0.5" value="24">
           <label class="row"><span>Across-wrist width</span><output id="width-value">110 mm</output></label>
@@ -57,7 +62,7 @@
           <label class="row"><span>Maximum face angle</span><output id="angle-value">45°</output></label>
           <input id="angle" type="range" min="15" max="60" step="1" value="45">
           <div class="coordinate"><label>Target X <input id="target-x" type="number" min="20" max="284.8" step="1" value="152.4"></label><label>Target Y <input id="target-y" type="number" min="20" max="284.8" step="1" value="92"></label></div>
-          <p class="hint">Broader, deeper fold preview around the wrist. This is a partial contact fold, not a closed cuff; watch the angle warning at larger settings.</p>
+          <p class="hint">The pleated option uses angular facets and crease lines. Choose “Smooth previous version” to restore the rounded form. Both remain design previews, not robot-ready paths.</p>
         </fieldset>
         <fieldset>
           <legend>04 / TOOLPATH PREVIEW</legend>

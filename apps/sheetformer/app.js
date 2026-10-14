@@ -1,17 +1,20 @@
 import { parseBasePlate } from './basePlate.js?v=obj-loaders-20261014';
 import { parseReferenceObj } from './referenceObj.js?v=obj-loaders-20261014';
+import { buildObjectField, sampleObjectField, chooseIndentTargets } from './objectForm.js';
 
 let SHEET = 304.8;
 let CLAMP = 57.4;
 const $ = (id) => document.getElementById(id);
 const formCanvas = $('form-view');
 const topCanvas = $('top-view');
-const controls = ['hand-scale', 'show-hand', 'edge', 'fold-style', 'depth', 'width', 'length', 'angle', 'target-x', 'target-y', 'step', 'show-path'];
+const controls = ['hand-scale', 'show-hand', 'form-driver', 'form-region', 'edge', 'fold-style', 'depth', 'indent-count', 'pad-radius', 'width', 'length', 'angle', 'target-x', 'target-y', 'step', 'show-path'];
 const state = {
   handScale: 21.8, showHand: true, edge: 10, depth: 42.5, width: 188,
   length: 188, angle: 45, targetX: 152.9, targetY: 151.4,
+  formDriver: 'object', formRegion: 'whole', indentCount: 3, padRadius: 37,
   foldStyle: 'faceted', step: 0.5, showPath: true, faceSelected: true,
   yaw: -1.02, pitch: 0.41, hand: [], handBounds: null,
+  objectMesh: null, objectField: null, fieldKey: '', fieldError: null, indentTargets: [], objectName: 'Loading…',
   axes: [], vertices: [], faces: [], contours: [], csvPoints: [],
   maxSlope: 0, baseLoaded: false, baseError: null
 };
@@ -23,6 +26,21 @@ let baseRequest = 0;
 let referenceRequest = 0;
 
 function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+function smoothstep(value) { const t = clamp(value, 0, 1); return t * t * (3 - 2 * t); }
+function fittedReferenceScale(bounds) {
+  const spanX = Math.max(bounds.maxX - bounds.minX, 1e-6);
+  const spanY = Math.max(bounds.maxY - bounds.minY, 1e-6);
+  const available = Math.max(10, SHEET - 2 * CLAMP - 16);
+  return Math.min(available / spanX, available / spanY);
+}
+function setReferenceScale(fit) {
+  const input = $('hand-scale');
+  input.min = (fit * 0.25).toPrecision(5);
+  input.max = (fit * 3).toPrecision(5);
+  input.step = (fit / 100).toPrecision(4);
+  input.value = fit.toPrecision(6);
+  state.handScale = +input.value;
+}
 function axis(step) {
   const values = [0, CLAMP];
   for (let p = CLAMP + step; p < SHEET - CLAMP - 0.001; p += step) values.push(p);
@@ -76,11 +94,54 @@ function facetedZAt(x, y) {
   }
   return 0;
 }
+function refreshObjectField() {
+  if (!state.objectMesh) return;
+  const key = `${SHEET}:${state.handScale}:${state.formRegion}`;
+  if (key === state.fieldKey) return;
+  try {
+    state.objectField = buildObjectField(state.objectMesh, {
+      sheet: SHEET, scale: state.handScale, region: state.formRegion
+    });
+    state.fieldKey = key;
+    state.fieldError = null;
+  } catch (error) {
+    state.objectField = null;
+    state.fieldError = error.message;
+  }
+}
+function objectZAt(x, y) {
+  const field = state.objectField;
+  const original = state.foldStyle === 'faceted' ? facetedZAt(x, y) : smoothZAt(x, y);
+  if (!field || !state.indentTargets.length) return original;
+  const sample = sampleObjectField(field, x, y);
+  const imprint = Math.exp(-Math.pow(sample.distance / 24, 1.35));
+  const u = Math.abs(x - state.targetX) / (state.width / 2);
+  const v = Math.abs(y - state.targetY) / (state.length / 2);
+  const window = smoothstep((1 - Math.max(u, v)) / 0.22);
+  const edge = smoothstep(Math.min(x - CLAMP, y - CLAMP, SHEET - CLAMP - x, SHEET - CLAMP - y) / 20);
+  const relief = clamp((sample.height - field.zMin) / Math.max(0.001, field.zMax - field.zMin), 0, 1);
+  let pad = 0;
+  for (const target of state.indentTargets) {
+    const dx = x - target.x, dy = y - target.y;
+    const shape = state.foldStyle === 'faceted'
+      ? Math.max(0, 1 - (Math.abs(dx) + Math.abs(dy)) / state.padRadius)
+      : Math.exp(-0.5 * (dx * dx + dy * dy) / (state.padRadius * state.padRadius * 0.35));
+    pad = Math.max(pad, shape);
+  }
+  const handVariation = state.depth * 0.08 * imprint * (0.45 + 0.55 * relief) * (0.75 + 0.25 * pad);
+  return Math.max(-state.depth, original - handVariation * window * edge);
+}
 function zAt(x, y) {
   if (!state.faceSelected || x <= CLAMP || y <= CLAMP || x >= SHEET - CLAMP || y >= SHEET - CLAMP) return 0;
+  if (state.formDriver === 'object') return objectZAt(x, y);
   return state.foldStyle === 'faceted' ? facetedZAt(x, y) : smoothZAt(x, y);
 }
 function mesh() {
+  refreshObjectField();
+  state.indentTargets = state.formDriver === 'object' && state.objectField
+    ? chooseIndentTargets(state.objectField, state.indentCount,
+      { x: state.targetX, y: state.targetY }, state.width, state.length, CLAMP)
+    : [];
   const ax = axis(state.edge);
   state.axes = ax;
   const n = ax.length;
@@ -173,21 +234,35 @@ function contours() {
   }
 }
 function readControls() {
+  const previousRegion = state.formRegion;
   state.handScale = +$('hand-scale').value;
   state.showHand = $('show-hand').checked;
+  state.formDriver = $('form-driver').value;
+  state.formRegion = $('form-region').value;
   state.edge = +$('edge').value;
   state.foldStyle = $('fold-style').value;
   state.depth = +$('depth').value;
+  state.indentCount = +$('indent-count').value;
+  state.padRadius = +$('pad-radius').value;
   state.width = +$('width').value;
   state.length = +$('length').value;
   state.angle = +$('angle').value;
+  if (state.formRegion !== previousRegion && state.objectMesh) {
+    refreshObjectField();
+    if (state.objectField) {
+      $('target-x').value = clamp(state.objectField.center.x, CLAMP + 5, SHEET - CLAMP - 5).toFixed(1);
+      $('target-y').value = clamp(state.objectField.center.y, CLAMP + 5, SHEET - CLAMP - 5).toFixed(1);
+    }
+  }
   state.targetX = clamp(+$('target-x').value || 152.9, CLAMP, SHEET - CLAMP);
   state.targetY = clamp(+$('target-y').value || 151.4, CLAMP, SHEET - CLAMP);
   state.step = +$('step').value;
   state.showPath = $('show-path').checked;
-  $('hand-scale-value').value = state.handScale.toFixed(1) + ' mm/unit';
+  $('hand-scale-value').value = `${+state.handScale.toPrecision(3)} mm/unit`;
   $('edge-value').value = state.edge + ' mm';
   $('depth-value').value = state.depth + ' mm';
+  $('indent-count-value').value = String(state.indentCount);
+  $('pad-radius-value').value = state.padRadius + ' mm';
   $('width-value').value = state.width + ' mm';
   $('length-value').value = state.length + ' mm';
   $('angle-value').value = state.angle + '°';
@@ -199,6 +274,19 @@ function updateReadouts() {
   $('mesh-readout').textContent = state.vertices.length.toLocaleString() + ' VERTICES · ' + state.maxSlope.toFixed(1) + '° MAX SLOPE';
   $('face-value').textContent = state.faceSelected ? 'CENTRAL' : 'NONE';
   $('path-readout').textContent = state.contours.length + ' contour loops · ' + state.csvPoints.length.toLocaleString() + ' ordered path points';
+  const maxDepth = Math.max(0, -Math.min(...state.vertices.map(v => v.z)));
+  $('stat-source').textContent = state.objectName;
+  $('stat-vertices').textContent = state.objectMesh ? state.objectMesh.vertices.length.toLocaleString() : '—';
+  $('stat-faces').textContent = state.objectMesh ? state.objectMesh.faces.length.toLocaleString() : '—';
+  $('stat-region').textContent = state.formRegion === 'lower' ? 'Lower-Y end' : 'Whole OBJ';
+  $('stat-targets').textContent = state.formDriver === 'manual' ? '1 manual' : `${state.indentTargets.length} / ${state.indentCount}`;
+  $('stat-area').textContent = state.objectField ? `${(state.objectField.footprint / 100).toFixed(1)} cm²` : '—';
+  $('stat-clamp').textContent = `${CLAMP.toFixed(1)} mm`;
+  $('stat-depth').textContent = `${maxDepth.toFixed(1)} mm`;
+  $('stat-angle').textContent = `${state.maxSlope.toFixed(1)}°`;
+  $('stat-limit').textContent = `${state.angle}°`;
+  $('stat-loops').textContent = state.contours.length.toLocaleString();
+  $('stat-path-points').textContent = state.csvPoints.length.toLocaleString();
   const status = $('status');
   if (state.baseError) {
     status.textContent = 'Base mesh unavailable: ' + state.baseError + '. Showing the 57.4 mm fallback inset.';
@@ -209,6 +297,9 @@ function updateReadouts() {
   } else if (!state.hand.length) {
     status.textContent = 'Loading hand reference…';
     status.classList.remove('warn');
+  } else if (state.formDriver === 'object' && (state.fieldError || !state.indentTargets.length)) {
+    status.textContent = state.fieldError || 'No OBJ surface falls inside the selected forming zone. Move the target or increase its width/length.';
+    status.classList.add('warn');
   } else if (!state.faceSelected) {
     status.textContent = 'Select the central face in the top view.';
     status.classList.add('warn');
@@ -216,7 +307,9 @@ function updateReadouts() {
     status.textContent = 'Slope exceeds ' + state.angle + '° setting. Reduce depth or widen the fold.';
     status.classList.add('warn');
   } else {
-    status.textContent = 'Preview within angle setting. Reference scale still needs confirmation.';
+    status.textContent = state.formDriver === 'object'
+      ? 'Original basin with subtle OBJ influence. Confirm scale and forming feasibility with the instructor.'
+      : 'Manual preview within angle setting. Reference scale still needs confirmation.';
     status.classList.remove('warn');
   }
 }
@@ -285,7 +378,7 @@ function handPoint(v) {
   return {
     x: SHEET / 2 + (v[0] - midX) * state.handScale,
     y: SHEET / 2 + (v[1] - midY) * state.handScale,
-    z: 18 + (v[2] - midZ) * state.handScale * 0.55
+    z: 20 + (v[2] - midZ) * state.handScale * 0.55
   };
 }
 function drawForm() {
@@ -380,6 +473,16 @@ function drawTop() {
   const target = map(state.targetX,state.targetY);
   ctx.fillStyle = '#ff6a3d'; ctx.beginPath(); ctx.arc(target.x,target.y,7,0,Math.PI*2); ctx.fill();
   ctx.strokeStyle = '#141414'; ctx.lineWidth = 2; ctx.stroke();
+  if (state.formDriver === 'object') for (let i = 0; i < state.indentTargets.length; i++) {
+    const p = map(state.indentTargets[i].x, state.indentTargets[i].y);
+    const atCenter = Math.hypot(p.x - target.x, p.y - target.y) < 9;
+    if (!atCenter) {
+      ctx.fillStyle = '#ff6a3d'; ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#141414'; ctx.lineWidth = 2; ctx.stroke();
+    }
+    ctx.fillStyle = '#eeebe5'; ctx.font = '10px ui-monospace, monospace';
+    ctx.fillText(`T${String(i + 1).padStart(2, '0')}`, p.x + 10, p.y - 10);
+  }
   ctx.fillStyle = '#eeebe5'; ctx.font = '10px ui-monospace, monospace';
   ctx.fillText(`FIXED ${CLAMP.toFixed(1)} MM CLAMP`, ox + 5, oy + 13);
 }
@@ -401,19 +504,32 @@ function exportCsv() {
   download('sheetformer_wrist_preview_NOT_ROBOT_READY.csv', rows.join('\n') + '\n', 'text/csv');
 }
 function applyReference(text, name) {
-  const { points, bounds } = parseReferenceObj(text);
-  state.hand = points;
-  state.handBounds = bounds;
+  const reference = parseReferenceObj(text);
   const custom = !name.startsWith('Default:');
+  const region = 'whole';
+  setReferenceScale(fittedReferenceScale(reference.bounds));
+  const field = buildObjectField(reference, { sheet: SHEET, scale: state.handScale, region });
+  state.hand = reference.points;
+  state.handBounds = reference.bounds;
+  state.objectMesh = reference;
+  state.objectField = field;
+  state.formRegion = region;
+  state.fieldKey = `${SHEET}:${state.handScale}:${region}`;
+  state.fieldError = null;
+  state.objectName = name.replace(/^Default: /, '');
+  $('form-region').value = region;
+  $('target-x').value = clamp(field.center.x, CLAMP + 5, SHEET - CLAMP - 5).toFixed(1);
+  $('target-y').value = clamp(field.center.y, CLAMP + 5, SHEET - CLAMP - 5).toFixed(1);
   $('reference-legend').textContent = custom ? '○ object reference' : '○ hand scan reference';
   $('reference-scale-label').textContent = custom ? 'Object scale' : 'Hand scale';
   $('reference-note').textContent = custom
-    ? 'The grey points show the loaded OBJ as a visual reference only. Its units are unspecified; check its scale before fabrication.'
-    : 'The grey points show the complete hand OBJ as a visual reference only. Its units are unspecified; check the scale against a measured wrist before fabrication.';
+    ? 'The original basin stays intact while the loaded OBJ adds subtle local depth variation. The grey points show its geometry; check units and orientation before fabrication.'
+    : 'The original basin stays intact while the full hand OBJ subtly changes its depth from fingers through palm and wrist. Confirm the scan scale before fabrication.';
+  $('form-view').setAttribute('aria-label', 'Perspective preview of OBJ-driven sheet forming');
   const label = $('object-file-status');
-  label.textContent = `${name} · ${points.length.toLocaleString()} preview vertices`;
+  label.textContent = `${name} · ${reference.vertices.length.toLocaleString()} vertices`;
   label.classList.remove('error');
-  updateReadouts(); scheduleDraw();
+  readControls();
 }
 function applyBase(text, name) {
   const base = parseBasePlate(text);
@@ -433,6 +549,15 @@ function applyBase(text, name) {
   }
   $('sheet-size').textContent = `${SHEET.toFixed(1)} × ${SHEET.toFixed(1)} MM`;
   $('clamp-readout').textContent = `The loaded base OBJ sets a ${CLAMP.toFixed(1)} mm flat clamping border. Click inside the top view to select its central face.`;
+  if (state.objectMesh) {
+    setReferenceScale(fittedReferenceScale(state.objectMesh.bounds));
+    state.fieldKey = '';
+    refreshObjectField();
+    if (state.objectField) {
+      $('target-x').value = clamp(state.objectField.center.x, CLAMP + 5, SHEET - CLAMP - 5).toFixed(1);
+      $('target-y').value = clamp(state.objectField.center.y, CLAMP + 5, SHEET - CLAMP - 5).toFixed(1);
+    }
+  }
   const label = $('base-file-status');
   label.textContent = name;
   label.classList.remove('error');

@@ -3,31 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SheetFormer — Wrist Study</title>
-  <meta name="description" content="Local design preview for a small incremental sheet-forming wrist study.">
+  <title>SheetFormer — Hand Study</title>
+  <meta name="description" content="Local design preview for an incremental sheet-forming hand study.">
   <link rel="stylesheet" href="./style.css?v=responsive-20261014">
+  <link rel="stylesheet" href="./object-form.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark"></span><span>SHEETFORMER <small>/ WRIST STUDY</small></span></div>
+    <div class="brand"><span class="brand-mark"></span><span>SHEETFORMER <small>/ HAND STUDY</small></span></div>
     <div class="top-note">LOCAL DESIGN PREVIEW <span class="signal"></span> NOT ROBOT-READY</div>
   </header>
   <main>
     <section class="intro"> 
       <div>
         <p class="eyebrow">01 / FORM STUDY</p>
-        <h1>Shape the sheet<br><em>toward the wrist.</em></h1>
+        <h1>Shape the sheet<br><em>toward the hand.</em></h1>
       </div>
-      <p class="intro-copy">A simple 12 × 12 in panel test based on the class toolpath exercise. Move the target point, adjust the depth, and inspect the form before discussing it with the instructor.</p>
+      <p class="intro-copy">A 12 × 12 in sheet study guided by the complete hand OBJ. Adjust the indentation points and depth, then inspect the preview before discussing fabrication with the instructor.</p>
     </section>
     <section class="workspace">
       <div class="views">
         <div class="view-head"><span>FORM PREVIEW <small>drag to orbit</small></span><span id="mesh-readout">—</span></div>
         <canvas id="form-view" aria-label="Perspective preview of the formed sheet and hand reference"></canvas>
         <div class="view-footer"><span>● formed sheet</span><span id="reference-legend">○ hand scan reference</span><span>— selected toolpath</span></div>
-        <div class="view-head secondary"><span>TOP / TARGET PLACEMENT <small>drag orange point</small></span><span id="sheet-size">304.8 × 304.8 MM</span></div>
+        <div class="view-head secondary"><span>TOP / TARGET PLACEMENT <small>drag center point · influence points auto-placed</small></span><span id="sheet-size">304.8 × 304.8 MM</span></div>
         <canvas id="top-view" aria-label="Top view showing clamp zone and draggable form target"></canvas>
-        <p class="canvas-note" id="reference-note">The grey points show the complete hand OBJ as a visual reference only. Its units are unspecified; check the scale against a measured wrist before fabrication.</p>
+        <p class="canvas-note" id="reference-note">The original basin stays intact while the full hand OBJ subtly changes its depth from fingers through palm and wrist. This is a design preview, not a collision or material simulation.</p>
       </div>
       <aside class="controls">
         <div class="panel-title"><span>PARAMETERS</span><span>( EDITABLE )</span></div>
@@ -36,11 +37,22 @@
           <legend>01 / REFERENCE</legend>
           <label class="row"><span id="reference-scale-label">Hand scale</span><output id="hand-scale-value">21.8 mm/unit</output></label>
           <input id="hand-scale" type="range" min="5" max="40" step="0.1" value="21.8">
-          <p class="hint">Display alignment only. The source OBJ declares no units.</p>
+          <p class="hint">Scale affects both the reference and the fitted sheet. OBJ units are unspecified.</p>
           <label class="row"><span>Reference visibility</span><input id="show-hand" type="checkbox" checked></label>
           <button class="load-obj" id="load-object-button" type="button">LOAD OBJECT OBJ</button>
           <input class="file-input" id="object-file" type="file" accept=".obj" aria-label="Choose an OBJ reference object">
           <p class="hint file-status" id="object-file-status" role="status">Default: HAND_clean_mesh.obj</p>
+          <label class="row" for="form-driver"><span>Form driver</span></label>
+          <select id="form-driver" aria-label="Form driver">
+            <option value="object" selected>Original basin + OBJ influence</option>
+            <option value="manual">Manual shape (previous)</option>
+          </select>
+          <label class="row" for="form-region"><span>OBJ region</span></label>
+          <select id="form-region" aria-label="OBJ region">
+            <option value="whole" selected>Whole OBJ</option>
+            <option value="lower">Lower-Y end / wrist</option>
+          </select>
+          <p class="hint">Whole OBJ uses fingers, palm, and wrist. The lower-Y option isolates this hand's wrist.</p>
         </fieldset>
         <fieldset>
           <legend>02 / FORMABLE FACE</legend>
@@ -61,14 +73,18 @@
           </select>
           <label class="row"><span>Depth below sheet</span><output id="depth-value">42.5 mm</output></label>
           <input id="depth" type="range" min="2" max="70" step="0.5" value="42.5">
-          <label class="row"><span>Across-wrist width</span><output id="width-value">188 mm</output></label>
+          <label class="row"><span>OBJ influence points</span><output id="indent-count-value">3</output></label>
+          <input id="indent-count" type="range" min="1" max="12" step="1" value="3">
+          <label class="row"><span>Indent radius</span><output id="pad-radius-value">37 mm</output></label>
+          <input id="pad-radius" type="range" min="10" max="70" step="1" value="37">
+          <label class="row"><span>Form zone width</span><output id="width-value">188 mm</output></label>
           <input id="width" type="range" min="35" max="190" step="1" value="188">
-          <label class="row"><span>Along-wrist length</span><output id="length-value">188 mm</output></label>
+          <label class="row"><span>Form zone length</span><output id="length-value">188 mm</output></label>
           <input id="length" type="range" min="45" max="190" step="1" value="188">
           <label class="row"><span>Maximum face angle</span><output id="angle-value">45°</output></label>
           <input id="angle" type="range" min="15" max="60" step="1" value="45">
           <div class="coordinate"><label>Target X <input id="target-x" type="number" min="57.4" max="247.4" step="0.1" value="152.9"></label><label>Target Y <input id="target-y" type="number" min="57.4" max="247.4" step="0.1" value="151.4"></label></div>
-          <p class="hint">The pleated option uses angular facets and crease lines. Choose “Original smooth shape” to restore the rounded form. Both remain design previews, not robot-ready paths.</p>
+          <p class="hint">The original low-poly basin and crease layout stay intact. The whole OBJ adds a small, local depth variation from fingers through palm and wrist. This remains a design preview, not a robot-ready path.</p>
         </fieldset>
         <fieldset>
           <legend>04 / TOOLPATH PREVIEW</legend>
@@ -84,8 +100,32 @@
         </div>
         <p class="warning">Preview only. The CSV follows the class column order but has not been checked for the classroom robot, tooling, fixtures, or safe clearance.</p>
       </aside>
+      <aside class="metrics" aria-label="Forming statistics">
+        <div class="panel-title"><span>LIVE STATS</span><span>( PREVIEW )</span></div>
+        <div class="metric-group"><h2>01 / INPUT</h2>
+          <div class="metric"><span>Reference</span><strong id="stat-source">Loading…</strong></div>
+          <div class="metric"><span>OBJ vertices</span><strong id="stat-vertices">—</strong></div>
+          <div class="metric"><span>Triangles</span><strong id="stat-faces">—</strong></div>
+          <div class="metric"><span>Region</span><strong id="stat-region">Whole OBJ</strong></div>
+        </div>
+        <div class="metric-group"><h2>02 / OBJ INFLUENCE</h2>
+          <div class="metric"><span>Targets placed</span><strong id="stat-targets">—</strong></div>
+          <div class="metric"><span>Projected area</span><strong id="stat-area">—</strong></div>
+          <div class="metric"><span>Clamp inset</span><strong id="stat-clamp">57.4 mm</strong></div>
+        </div>
+        <div class="metric-group"><h2>03 / FORM</h2>
+          <div class="metric"><span>Max depth</span><strong id="stat-depth">—</strong></div>
+          <div class="metric"><span>Max face angle</span><strong id="stat-angle">—</strong></div>
+          <div class="metric"><span>Angle setting</span><strong id="stat-limit">45°</strong></div>
+        </div>
+        <div class="metric-group"><h2>04 / PATH</h2>
+          <div class="metric"><span>Contour loops</span><strong id="stat-loops">—</strong></div>
+          <div class="metric"><span>Ordered points</span><strong id="stat-path-points">—</strong></div>
+        </div>
+        <p class="metric-foot">Geometry measurements only. No stiffness, forming-force, collision, or robot-safety calculation is performed.</p>
+      </aside>
     </section>
   </main>
-  <script type="module" src="./app.js?v=obj-loaders-20261014"></script>
+  <script type="module" src="./app.js?v=obj-driven-local-1"></script>
 </body>
 </html>

@@ -34,16 +34,16 @@
         <div class="status" id="status">Loading geometry…</div>
         <fieldset>
           <legend>01 / REFERENCE</legend>
-          <label class="row"><span>Hand scale</span><output id="hand-scale-value">25.4 mm/unit</output></label>
-          <input id="hand-scale" type="range" min="5" max="40" step="0.1" value="25.4">
+          <label class="row"><span>Hand scale</span><output id="hand-scale-value">21.8 mm/unit</output></label>
+          <input id="hand-scale" type="range" min="5" max="40" step="0.1" value="21.8">
           <p class="hint">Display alignment only. The source OBJ declares no units.</p>
           <label class="row"><span>Reference visibility</span><input id="show-hand" type="checkbox" checked></label>
         </fieldset>
         <fieldset>
           <legend>02 / FORMABLE FACE</legend>
           <p class="hint">Click inside the top view to select the central face. The outer 20 mm stays flat for clamping.</p>
-          <label class="row"><span>Target edge length</span><output id="edge-value">8 mm</output></label>
-          <input id="edge" type="range" min="4" max="20" step="1" value="8">
+          <label class="row"><span>Target edge length</span><output id="edge-value">10 mm</output></label>
+          <input id="edge" type="range" min="4" max="20" step="1" value="10">
           <label class="row"><span>Active face</span><strong id="face-value">CENTRAL</strong></label>
         </fieldset>
         <fieldset>
@@ -51,18 +51,18 @@
           <label class="row" for="fold-style"><span>Fold language</span></label>
           <select id="fold-style" aria-label="Fold language">
             <option value="faceted" selected>Triangulated pleats</option>
-            <option value="smooth">Smooth previous version</option>
+            <option value="smooth">Original smooth shape</option>
           </select>
-          <label class="row"><span>Depth below sheet</span><output id="depth-value">24 mm</output></label>
-          <input id="depth" type="range" min="2" max="70" step="0.5" value="24">
-          <label class="row"><span>Across-wrist width</span><output id="width-value">110 mm</output></label>
-          <input id="width" type="range" min="35" max="200" step="1" value="110">
-          <label class="row"><span>Along-wrist length</span><output id="length-value">145 mm</output></label>
-          <input id="length" type="range" min="45" max="250" step="1" value="145">
+          <label class="row"><span>Depth below sheet</span><output id="depth-value">42.5 mm</output></label>
+          <input id="depth" type="range" min="2" max="70" step="0.5" value="42.5">
+          <label class="row"><span>Across-wrist width</span><output id="width-value">188 mm</output></label>
+          <input id="width" type="range" min="35" max="200" step="1" value="188">
+          <label class="row"><span>Along-wrist length</span><output id="length-value">209 mm</output></label>
+          <input id="length" type="range" min="45" max="250" step="1" value="209">
           <label class="row"><span>Maximum face angle</span><output id="angle-value">45°</output></label>
           <input id="angle" type="range" min="15" max="60" step="1" value="45">
-          <div class="coordinate"><label>Target X <input id="target-x" type="number" min="20" max="284.8" step="1" value="152.4"></label><label>Target Y <input id="target-y" type="number" min="20" max="284.8" step="1" value="92"></label></div>
-          <p class="hint">The pleated option uses angular facets and crease lines. Choose “Smooth previous version” to restore the rounded form. Both remain design previews, not robot-ready paths.</p>
+          <div class="coordinate"><label>Target X <input id="target-x" type="number" min="20" max="284.8" step="0.1" value="152.9"></label><label>Target Y <input id="target-y" type="number" min="20" max="284.8" step="0.1" value="151.4"></label></div>
+          <p class="hint">The pleated option uses angular facets and crease lines. Choose “Original smooth shape” to restore the rounded form. Both remain design previews, not robot-ready paths.</p>
         </fieldset>
         <fieldset>
           <legend>04 / TOOLPATH PREVIEW</legend>

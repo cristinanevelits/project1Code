@@ -5,10 +5,10 @@ const formCanvas = $('form-view');
 const topCanvas = $('top-view');
 const controls = ['hand-scale', 'show-hand', 'edge', 'fold-style', 'depth', 'width', 'length', 'angle', 'target-x', 'target-y', 'step', 'show-path'];
 const state = {
-  handScale: 25.4, showHand: true, edge: 8, depth: 24, width: 110,
-  length: 145, angle: 45, targetX: 152.4, targetY: 92,
+  handScale: 21.8, showHand: true, edge: 10, depth: 42.5, width: 188,
+  length: 209, angle: 45, targetX: 152.9, targetY: 151.4,
   foldStyle: 'faceted', step: 0.5, showPath: true, faceSelected: true,
-  yaw: -0.65, pitch: 0.60, hand: [], handBounds: null,
+  yaw: -1.02, pitch: 0.41, hand: [], handBounds: null,
   axes: [], vertices: [], faces: [], contours: [], csvPoints: [],
   maxSlope: 0
 };
@@ -93,15 +93,13 @@ function mesh() {
     }
   }
   let maxSlope = 0;
-  for (let j = 1; j < n - 1; j++) {
-    for (let i = 1; i < n - 1; i++) {
-      const at = state.vertices[j * n + i];
-      const left = state.vertices[j * n + i - 1], right = state.vertices[j * n + i + 1];
-      const below = state.vertices[(j - 1) * n + i], above = state.vertices[(j + 1) * n + i];
-      const gx = (right.z - left.z) / (right.x - left.x);
-      const gy = (above.z - below.z) / (above.y - below.y);
-      maxSlope = Math.max(maxSlope, Math.atan(Math.hypot(gx, gy)) * 180 / Math.PI);
-    }
+  for (const [ia, ib, ic] of state.faces) {
+    const a = state.vertices[ia], b = state.vertices[ib], c = state.vertices[ic];
+    const det = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+    if (Math.abs(det) < 1e-9) continue;
+    const gx = ((b.z - a.z) * (c.y - a.y) - (c.z - a.z) * (b.y - a.y)) / det;
+    const gy = ((b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)) / det;
+    maxSlope = Math.max(maxSlope, Math.atan(Math.hypot(gx, gy)) * 180 / Math.PI);
   }
   state.maxSlope = maxSlope;
   contours();
@@ -172,12 +170,13 @@ function readControls() {
   state.handScale = +$('hand-scale').value;
   state.showHand = $('show-hand').checked;
   state.edge = +$('edge').value;
+  state.foldStyle = $('fold-style').value;
   state.depth = +$('depth').value;
   state.width = +$('width').value;
   state.length = +$('length').value;
   state.angle = +$('angle').value;
-  state.targetX = clamp(+$('target-x').value || 152.4, CLAMP, SHEET - CLAMP);
-  state.targetY = clamp(+$('target-y').value || 152.4, CLAMP, SHEET - CLAMP);
+  state.targetX = clamp(+$('target-x').value || 152.9, CLAMP, SHEET - CLAMP);
+  state.targetY = clamp(+$('target-y').value || 151.4, CLAMP, SHEET - CLAMP);
   state.step = +$('step').value;
   state.showPath = $('show-path').checked;
   $('hand-scale-value').value = state.handScale.toFixed(1) + ' mm/unit';
@@ -239,6 +238,34 @@ function polygon(ctx, points, fill, stroke) {
   if (fill) { ctx.fillStyle = fill; ctx.fill(); }
   if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
 }
+function foldCreases() {
+  const lines = [];
+  const point = (row, col) => {
+    const v = foldVertex(row, col);
+    const x = state.targetX + v.u * state.width / 2;
+    const y = state.targetY + v.v * state.length / 2;
+    return { x, y, z: zAt(x, y) };
+  };
+  for (let col = 1; col <= 3; col++) {
+    for (let row = 0; row < 4; row++) lines.push([point(row, col), point(row + 1, col)]);
+  }
+  for (let row = 1; row <= 3; row++) {
+    for (let col = 0; col < 4; col++) lines.push([point(row, col), point(row, col + 1)]);
+  }
+  for (let row = 1; row <= 2; row++) {
+    for (let col = 1; col <= 2; col++) lines.push([point(row, col), point(row + 1, col + 1)]);
+  }
+  return lines;
+}
+function drawCreases(ctx, mapPoint, opacity) {
+  if (state.foldStyle !== 'faceted' || !state.faceSelected) return;
+  ctx.strokeStyle = `rgba(235,232,225,${opacity})`;
+  ctx.lineWidth = 1.3;
+  for (const [a, b] of foldCreases()) {
+    const p = mapPoint(a), q = mapPoint(b);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+  }
+}
 function handPoint(v) {
   const midX = (state.handBounds.minX + state.handBounds.maxX) / 2;
   const midY = (state.handBounds.minY + state.handBounds.maxY) / 2;
@@ -262,14 +289,20 @@ function drawForm() {
     const d = state.vertices[(j + 1) * n + i], c = state.vertices[(j + 1) * n + i + 1];
     const world = [a, b, c, d];
     const points = world.map(p => project(p.x, p.y, p.z, w, h));
-    cells.push({ points, z: (a.z + b.z + c.z + d.z) / 4, order: points.reduce((sum, p) => sum + p.y, 0) / 4 });
+    const gx = (b.z - a.z) / (b.x - a.x);
+    const gy = (d.z - a.z) / (d.y - a.y);
+    cells.push({ points, z: (a.z + b.z + c.z + d.z) / 4, light: gx * 42 - gy * 32,
+      order: points.reduce((sum, p) => sum + p.y, 0) / 4 });
   }
   cells.sort((a, b) => a.order - b.order);
   ctx.lineWidth = .65;
   for (const cell of cells) {
-    const shade = Math.round(69 + clamp(-cell.z / Math.max(1, state.depth), 0, 1) * 53);
-    polygon(ctx, cell.points, `rgb(${shade},${shade + 1},${shade + 2})`, 'rgba(238,235,229,.13)');
+    const directional = state.foldStyle === 'faceted' ? clamp(cell.light, -30, 30) : 0;
+    const shade = Math.round(69 + clamp(-cell.z / Math.max(1, state.depth), 0, 1) * 53 + directional);
+    const grid = state.foldStyle === 'faceted' ? 'rgba(238,235,229,.055)' : 'rgba(238,235,229,.13)';
+    polygon(ctx, cell.points, `rgb(${shade},${shade + 1},${shade + 2})`, grid);
   }
+  drawCreases(ctx, p => project(p.x, p.y, p.z + 1, w, h), .55);
   const border = [[CLAMP,CLAMP],[SHEET-CLAMP,CLAMP],[SHEET-CLAMP,SHEET-CLAMP],[CLAMP,SHEET-CLAMP]].map(([x,y]) => project(x,y,zAt(x,y),w,h));
   ctx.lineWidth = 1.5; polygon(ctx, border, null, 'rgba(238,235,229,.75)');
   if (state.showHand && state.handBounds) {
@@ -281,8 +314,8 @@ function drawForm() {
     }
   }
   if (state.showPath) {
-    ctx.lineWidth = 1.15;
-    ctx.strokeStyle = 'rgba(255,106,61,.83)';
+    ctx.lineWidth = state.foldStyle === 'faceted' ? .85 : 1.15;
+    ctx.strokeStyle = state.foldStyle === 'faceted' ? 'rgba(255,106,61,.33)' : 'rgba(255,106,61,.83)';
     for (const line of state.contours) {
       ctx.beginPath();
       for (let i = 0; i < line.length; i++) {
@@ -322,8 +355,9 @@ function drawTop() {
       ctx.fillRect(p.x,p.y,1.3,1.3);
     }
   }
+  drawCreases(ctx, p => map(p.x, p.y), .38);
   if (state.showPath) {
-    ctx.strokeStyle = 'rgba(255,106,61,.35)';
+    ctx.strokeStyle = state.foldStyle === 'faceted' ? 'rgba(255,106,61,.18)' : 'rgba(255,106,61,.35)';
     ctx.lineWidth = 1;
     for (const line of state.contours) {
       ctx.beginPath();

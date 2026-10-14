@@ -120,15 +120,16 @@ function objectZAt(x, y) {
   const window = smoothstep((1 - Math.max(u, v)) / 0.22);
   const edge = smoothstep(Math.min(x - CLAMP, y - CLAMP, SHEET - CLAMP - x, SHEET - CLAMP - y) / 20);
   const relief = clamp((sample.height - field.zMin) / Math.max(0.001, field.zMax - field.zMin), 0, 1);
-  let pad = 0;
+  let pointPressure = 0;
   for (const target of state.indentTargets) {
     const dx = x - target.x, dy = y - target.y;
     const shape = state.foldStyle === 'faceted'
       ? Math.max(0, 1 - (Math.abs(dx) + Math.abs(dy)) / state.padRadius)
       : Math.exp(-0.5 * (dx * dx + dy * dy) / (state.padRadius * state.padRadius * 0.35));
-    pad = Math.max(pad, shape);
+    const height = clamp((target.z - field.zMin) / Math.max(.001, field.zMax - field.zMin), 0, 1);
+    pointPressure = Math.max(pointPressure, shape * (0.65 + 0.35 * height));
   }
-  const handVariation = state.depth * 0.08 * imprint * (0.45 + 0.55 * relief) * (0.75 + 0.25 * pad);
+  const handVariation = state.depth * (0.035 * imprint * (0.45 + 0.55 * relief) + 0.10 * pointPressure);
   return Math.max(-state.depth, original - handVariation * window * edge);
 }
 function zAt(x, y) {
@@ -428,6 +429,28 @@ function drawForm() {
         if (!i) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
       }
       ctx.stroke();
+    }
+  }
+  if (state.formDriver === 'object' && state.showHand) {
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,106,61,.48)';
+    ctx.setLineDash([3, 4]);
+    for (let i = 0; i < state.indentTargets.length; i++) {
+      const target = state.indentTargets[i];
+      const source = handPoint(target.raw);
+      const from = project(source.x, source.y, source.z, w, h);
+      const to = project(target.x, target.y, zAt(target.x, target.y), w, h);
+      ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    for (let i = 0; i < state.indentTargets.length; i++) {
+      const target = state.indentTargets[i];
+      const source = handPoint(target.raw);
+      const p = project(source.x, source.y, source.z, w, h);
+      ctx.fillStyle = '#ff6a3d'; ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#141414'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = '#eeebe5'; ctx.font = '10px ui-monospace, monospace';
+      ctx.fillText(`T${String(i + 1).padStart(2, '0')}`, p.x + 8, p.y - 8);
     }
   }
   const target = project(state.targetX,state.targetY,zAt(state.targetX,state.targetY)+3,w,h);

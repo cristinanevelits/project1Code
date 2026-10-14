@@ -8,6 +8,7 @@ export function buildObjectField(mesh, { sheet, scale, region, resolution = 129 
   const midY = (bounds.minY + bounds.maxY) / 2;
   const cutoff = region === 'lower' ? bounds.minY + (bounds.maxY - bounds.minY) * 0.32 : Infinity;
   const xy = vertices.map(([x, y, z]) => [sheet / 2 + (x - midX) * scale, sheet / 2 + (y - midY) * scale, z]);
+  const projectedVertices = [];
   const stride = sheet / (resolution - 1);
   const top = new Float32Array(resolution * resolution);
   top.fill(-Infinity);
@@ -16,6 +17,7 @@ export function buildObjectField(mesh, { sheet, scale, region, resolution = 129 
   for (let i = 0; i < vertices.length; i++) {
     if (vertices[i][1] > cutoff) continue;
     const [x, y, z] = xy[i];
+    projectedVertices.push({ x, y, z, sourceIndex: i, raw: vertices[i] });
     zMin = Math.min(zMin, z); zMax = Math.max(zMax, z);
     minX = Math.min(minX, x); maxX = Math.max(maxX, x);
     minY = Math.min(minY, y); maxY = Math.max(maxY, y);
@@ -81,7 +83,7 @@ export function buildObjectField(mesh, { sheet, scale, region, resolution = 129 
     if (i < resolution - 1 && j < resolution - 1) adopt(k, k + resolution + 1, stride * Math.SQRT2);
     if (i && j < resolution - 1) adopt(k, k + resolution - 1, stride * Math.SQRT2);
   }
-  return { sheet, resolution, stride, distance, nearest, occupied, zMin, zMax,
+  return { sheet, resolution, stride, distance, nearest, occupied, projectedVertices, zMin, zMax,
     center: { x: (minX + maxX) / 2, y: (minY + maxY) / 2 },
     footprint: occupied.length * stride * stride };
 }
@@ -101,7 +103,7 @@ export function sampleObjectField(field, x, y) {
 }
 
 export function chooseIndentTargets(field, count, center, width, length, clampInset) {
-  const candidates = field.occupied.filter(p =>
+  const candidates = field.projectedVertices.filter(p =>
     p.x > clampInset + 12 && p.x < field.sheet - clampInset - 12 &&
     p.y > clampInset + 12 && p.y < field.sheet - clampInset - 12 &&
     Math.abs(p.x - center.x) < width * .48 && Math.abs(p.y - center.y) < length * .48);
@@ -121,5 +123,5 @@ export function chooseIndentTargets(field, count, center, width, length, clampIn
     if (!best) break;
     targets.push(best);
   }
-  return targets.map(({ x, y }) => ({ x, y }));
+  return targets.map(({ x, y, z, sourceIndex, raw }) => ({ x, y, z, sourceIndex, raw }));
 }

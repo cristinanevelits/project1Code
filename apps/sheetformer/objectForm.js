@@ -125,3 +125,8 @@ export function chooseIndentTargets(field, count, center, width, length, clampIn
   }
   return targets.map(({ x, y, z, sourceIndex, raw }) => ({ x, y, z, sourceIndex, raw }));
 }
+
+export function reprojectIndentTargets(field, sourceIndices) {
+  const projected = new Map(field.projectedVertices.map(point => [point.sourceIndex, point]));
+  return sourceIndices.map(index => projected.get(index)).filter(Boolean);
+}

@@ -1,6 +1,6 @@
 import { parseBasePlate } from './basePlate.js?v=obj-loaders-20261014';
 import { parseReferenceObj } from './referenceObj.js?v=obj-loaders-20261014';
-import { buildObjectField, sampleObjectField, chooseIndentTargets } from './objectForm.js';
+import { buildObjectField, sampleObjectField, chooseIndentTargets, reprojectIndentTargets } from './objectForm.js';
 
 let SHEET = 304.8;
 let CLAMP = 57.4;
@@ -14,7 +14,8 @@ const state = {
   formDriver: 'object', formRegion: 'whole', indentCount: 3, padRadius: 37,
   foldStyle: 'faceted', step: 0.5, showPath: true, faceSelected: true,
   yaw: -1.02, pitch: 0.41, hand: [], handBounds: null,
-  objectMesh: null, objectField: null, fieldKey: '', fieldError: null, indentTargets: [], objectName: 'Loading…',
+  objectMesh: null, objectField: null, fieldKey: '', fieldError: null, indentTargets: [],
+  indentSourceIndices: [], indentSelectionKey: '', objectName: 'Loading…',
   axes: [], vertices: [], faces: [], contours: [], csvPoints: [],
   maxSlope: 0, baseLoaded: false, baseError: null
 };
@@ -139,10 +140,21 @@ function zAt(x, y) {
 }
 function mesh() {
   refreshObjectField();
-  state.indentTargets = state.formDriver === 'object' && state.objectField
-    ? chooseIndentTargets(state.objectField, state.indentCount,
-      { x: state.targetX, y: state.targetY }, state.width, state.length, CLAMP)
-    : [];
+  if (state.formDriver === 'object' && state.objectField) {
+    // Keep the selected OBJ vertices fixed while scale changes. Only their
+    // projection into sheet coordinates should move with the reference.
+    const selectionKey = [state.formRegion, state.indentCount, state.targetX,
+      state.targetY, state.width, state.length, SHEET, CLAMP].join(':');
+    if (selectionKey !== state.indentSelectionKey) {
+      const selected = chooseIndentTargets(state.objectField, state.indentCount,
+        { x: state.targetX, y: state.targetY }, state.width, state.length, CLAMP);
+      state.indentSourceIndices = selected.map(point => point.sourceIndex);
+      state.indentSelectionKey = selectionKey;
+    }
+    state.indentTargets = reprojectIndentTargets(state.objectField, state.indentSourceIndices);
+  } else {
+    state.indentTargets = [];
+  }
   const ax = axis(state.edge);
   state.axes = ax;
   const n = ax.length;
@@ -536,6 +548,8 @@ function applyReference(text, name) {
   state.handBounds = reference.bounds;
   state.objectMesh = reference;
   state.objectField = field;
+  state.indentSourceIndices = [];
+  state.indentSelectionKey = '';
   state.formRegion = region;
   state.fieldKey = `${SHEET}:${state.handScale}:${region}`;
   state.fieldError = null;

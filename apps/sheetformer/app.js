@@ -8,6 +8,14 @@ let CLAMP = 57.4;
 const $ = (id) => document.getElementById(id);
 const formCanvas = $('form-view');
 const topCanvas = $('top-view');
+const theme = getComputedStyle(document.documentElement);
+const MAUVE = theme.getPropertyValue('--detail').trim();
+const BLUE = theme.getPropertyValue('--detail2').trim();
+function withAlpha(hex, alpha) {
+  const color = hex.replace('#', '');
+  const [red, green, blue] = [0, 2, 4].map(index => parseInt(color.slice(index, index + 2), 16));
+  return `rgba(${red},${green},${blue},${alpha})`;
+}
 const controls = ['hand-scale', 'show-hand', 'form-driver', 'form-region', 'edge', 'fold-style', 'depth', 'indent-count', 'pad-radius', 'width', 'length', 'angle', 'target-x', 'target-y', 'step', 'show-path'];
 const state = {
   handScale: 21.8, showHand: true, edge: 10, depth: 42.5, width: 188,
@@ -293,6 +301,7 @@ function updateReadouts() {
   $('face-value').textContent = state.faceSelected ? 'CENTRAL' : 'NONE';
   $('path-readout').textContent = state.contours.length + ' contour loops · ' + state.csvPoints.length.toLocaleString() + ' ordered path points';
   const maxDepth = Math.max(0, -Math.min(...state.vertices.map(v => v.z)));
+  $('hero-depth').textContent = maxDepth.toFixed(1);
   $('stat-source').textContent = state.objectName;
   $('stat-vertices').textContent = state.objectMesh ? state.objectMesh.vertices.length.toLocaleString() : '—';
   $('stat-faces').textContent = state.objectMesh ? state.objectMesh.faces.length.toLocaleString() : '—';
@@ -306,6 +315,7 @@ function updateReadouts() {
   $('stat-limit').textContent = `${state.angle}°`;
   $('stat-loops').textContent = state.contours.length.toLocaleString();
   $('stat-path-points').textContent = state.csvPoints.length.toLocaleString();
+  updateProfileGraph();
   const status = $('status');
   if (state.baseError) {
     status.textContent = 'Base mesh unavailable: ' + state.baseError + '. Showing the 57.4 mm fallback inset.';
@@ -331,6 +341,27 @@ function updateReadouts() {
       : 'Manual preview within angle setting. Reference scale still needs confirmation.';
     status.classList.remove('warn');
   }
+}
+function updateProfileGraph() {
+  const sheet = [], reference = [];
+  let startedReference = false;
+  for (let index = 0; index <= 48; index++) {
+    const x = CLAMP + (SHEET - 2 * CLAMP) * index / 48;
+    const graphX = 196 * index / 48;
+    const depthY = 16 + clamp(-zAt(x, state.targetY) / Math.max(1, state.depth), 0, 1) * 43;
+    sheet.push(`${index ? 'L' : 'M'}${graphX.toFixed(1)} ${depthY.toFixed(1)}`);
+    if (state.formDriver !== 'object' || !state.objectField) continue;
+    const sample = sampleObjectField(state.objectField, x, state.targetY);
+    if (sample.distance > 12) { startedReference = false; continue; }
+    const relief = clamp((sample.height - state.objectField.zMin) /
+      Math.max(.001, state.objectField.zMax - state.objectField.zMin), 0, 1);
+    const reliefY = 56 - relief * 34;
+    reference.push(`${startedReference ? 'L' : 'M'}${graphX.toFixed(1)} ${reliefY.toFixed(1)}`);
+    startedReference = true;
+  }
+  $('profile-sheet').setAttribute('d', sheet.join(' '));
+  $('profile-fill').setAttribute('d', `${sheet.join(' ')} L196 62 L0 62 Z`);
+  $('profile-reference').setAttribute('d', reference.join(' '));
 }
 function fitCanvas(canvas) {
   const rect = canvas.getBoundingClientRect();
@@ -457,7 +488,7 @@ function drawForm() {
   }
   if (state.showPath) {
     ctx.lineWidth = state.foldStyle === 'faceted' ? .85 : 1.15;
-    ctx.strokeStyle = state.foldStyle === 'faceted' ? 'rgba(255,106,61,.33)' : 'rgba(255,106,61,.83)';
+    ctx.strokeStyle = state.foldStyle === 'faceted' ? withAlpha(MAUVE, .33) : withAlpha(MAUVE, .83);
     for (const line of state.contours) {
       ctx.beginPath();
       for (let i = 0; i < line.length; i++) {
@@ -469,7 +500,7 @@ function drawForm() {
   }
   if (state.formDriver === 'object' && state.showHand) {
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(255,106,61,.48)';
+    ctx.strokeStyle = withAlpha(BLUE, .55);
     ctx.setLineDash([3, 4]);
     for (let i = 0; i < state.indentTargets.length; i++) {
       const target = state.indentTargets[i];
@@ -483,14 +514,14 @@ function drawForm() {
       const target = state.indentTargets[i];
       const source = handPoint(target.raw);
       const p = project(source.x, source.y, source.z, w, h);
-      ctx.fillStyle = '#ff6a3d'; ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = BLUE; ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#141414'; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = '#eeebe5'; ctx.font = '10px ui-monospace, monospace';
       ctx.fillText(`T${String(i + 1).padStart(2, '0')}`, p.x + 8, p.y - 8);
     }
   }
   const target = project(state.targetX,state.targetY,zAt(state.targetX,state.targetY)+3,w,h);
-  ctx.fillStyle = '#ff6a3d'; ctx.beginPath(); ctx.arc(target.x,target.y,5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = BLUE; ctx.beginPath(); ctx.arc(target.x,target.y,5,0,Math.PI*2); ctx.fill();
   ctx.fillStyle = '#8c8b87'; ctx.font = '11px ui-monospace, monospace'; ctx.fillText('PERSPECTIVE / MM', 17, h - 19);
 }
 function drawTop() {
@@ -530,7 +561,7 @@ function drawTop() {
     }), null, ctx.strokeStyle);
   }
   if (state.showPath) {
-    ctx.strokeStyle = state.foldStyle === 'faceted' ? 'rgba(255,106,61,.18)' : 'rgba(255,106,61,.35)';
+    ctx.strokeStyle = state.foldStyle === 'faceted' ? withAlpha(MAUVE, .18) : withAlpha(MAUVE, .35);
     ctx.lineWidth = 1;
     for (const line of state.contours) {
       ctx.beginPath();
@@ -539,13 +570,13 @@ function drawTop() {
     }
   }
   const target = map(state.targetX,state.targetY);
-  ctx.fillStyle = '#ff6a3d'; ctx.beginPath(); ctx.arc(target.x,target.y,7,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = BLUE; ctx.beginPath(); ctx.arc(target.x,target.y,7,0,Math.PI*2); ctx.fill();
   ctx.strokeStyle = '#141414'; ctx.lineWidth = 2; ctx.stroke();
   if (state.formDriver === 'object') for (let i = 0; i < state.indentTargets.length; i++) {
     const p = map(state.indentTargets[i].x, state.indentTargets[i].y);
     const atCenter = Math.hypot(p.x - target.x, p.y - target.y) < 9;
     if (!atCenter) {
-      ctx.fillStyle = '#ff6a3d'; ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = BLUE; ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#141414'; ctx.lineWidth = 2; ctx.stroke();
     }
     ctx.fillStyle = '#eeebe5'; ctx.font = '10px ui-monospace, monospace';

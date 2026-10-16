@@ -1,8 +1,28 @@
 .workspace{grid-template-columns:minmax(0,1fr) 350px 220px}
+input[type=range]{accent-color:var(--pulse)}
+input[type=checkbox]{accent-color:var(--detail)}
+.brand-mark:after,.signal{background:var(--detail)}
+.load-obj:hover,.load-obj:focus-visible,.actions button:hover,.file-status.error,.status.warn{border-color:var(--detail);color:var(--detail)}
+.form-stage{position:relative;overflow:hidden}
+.depth-hero{position:absolute;top:18px;left:18px;display:flex;flex-direction:column;pointer-events:none;text-shadow:0 2px 10px var(--bg)}
+.depth-hero-label,.depth-hero-caption{font:9px ui-monospace,SFMono-Regular,monospace;letter-spacing:.12em;color:var(--muted)}
+.depth-hero-value{font:400 clamp(42px,5vw,74px)/.95 Georgia,serif;letter-spacing:-.06em;color:var(--detail);font-variant-numeric:tabular-nums}
+.depth-hero-caption{margin-top:5px;color:var(--detail2)}
 .metrics{min-width:0;background:var(--panel);border:1px solid var(--rule);align-self:start;font:10px ui-monospace,SFMono-Regular,monospace}
 .metrics .panel-title{gap:6px;font-size:10px}
+.metrics-profile{padding:12px 13px 14px;border-bottom:1px solid var(--rule)}
+.metrics-profile-title,.profile-key{display:flex;justify-content:space-between;gap:6px;color:var(--muted);font-size:9px;letter-spacing:.05em}
+.metrics-profile-title span:last-child{color:var(--detail2)}
+.metrics-profile svg{display:block;width:100%;height:auto;margin:11px 0 9px;overflow:visible}
+.profile-grid{fill:none;stroke:var(--rule);stroke-width:.6}
+.profile-fill{fill:var(--detail);opacity:.1}
+.profile-sheet,.profile-reference{fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.profile-sheet{stroke:var(--detail)}
+.profile-reference{stroke:var(--detail2);stroke-width:1.25;stroke-dasharray:3 3}
+.profile-key span{white-space:nowrap}.profile-key i{display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:50%;vertical-align:middle}
+.key-sheet{background:var(--detail)}.key-reference{background:var(--detail2)}
 .metric-group{padding:15px 13px;border-top:1px solid var(--rule)}
-.metric-group h2{margin:0 0 13px;color:var(--pulse);font-size:10px;font-weight:400;letter-spacing:.1em}
+.metric-group h2{margin:0 0 13px;color:var(--detail);font-size:10px;font-weight:400;letter-spacing:.1em}
 .metric{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:8px 0;color:var(--muted)}
 .metric strong{min-width:0;text-align:right;overflow-wrap:anywhere;color:var(--text);font-weight:400}
 .metric-foot{margin:0;padding:14px 13px;border-top:1px solid var(--rule);line-height:1.5;color:var(--muted)}

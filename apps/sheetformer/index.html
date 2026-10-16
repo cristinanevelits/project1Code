@@ -24,7 +24,14 @@
     <section class="workspace">
       <div class="views">
         <div class="view-head"><span>FORM PREVIEW <small>drag to orbit</small></span><span id="mesh-readout">—</span></div>
-        <canvas id="form-view" aria-label="Perspective preview of the formed sheet and hand reference"></canvas>
+        <div class="form-stage">
+          <canvas id="form-view" aria-label="Perspective preview of the formed sheet and hand reference"></canvas>
+          <div class="depth-hero" aria-label="Current maximum sheet depth">
+            <span class="depth-hero-label">FORM DEPTH / MM</span>
+            <span class="depth-hero-value" id="hero-depth">—</span>
+            <span class="depth-hero-caption">LIVE GEOMETRY</span>
+          </div>
+        </div>
         <div class="view-footer"><span>● formed sheet</span><span id="reference-legend">○ hand scan reference</span><span>— selected toolpath</span></div>
         <div class="view-head secondary"><span>TOP / TARGET PLACEMENT <small>drag center point · influence points auto-placed</small></span><span id="sheet-size">304.8 × 304.8 MM</span></div>
         <canvas id="top-view" aria-label="Top view showing clamp zone and draggable form target"></canvas>
@@ -102,6 +109,16 @@
       </aside>
       <aside class="metrics" aria-label="Forming statistics">
         <div class="panel-title"><span>LIVE STATS</span><span>( PREVIEW )</span></div>
+        <div class="metrics-profile">
+          <div class="metrics-profile-title"><span>SECTION / X AXIS</span><span>LIVE</span></div>
+          <svg viewBox="0 0 196 72" role="img" aria-label="Live section graph of sheet depth and OBJ reference relief">
+            <path class="profile-grid" d="M0 18H196 M0 38H196 M0 58H196"/>
+            <path class="profile-fill" id="profile-fill"/>
+            <path class="profile-sheet" id="profile-sheet"/>
+            <path class="profile-reference" id="profile-reference"/>
+          </svg>
+          <div class="profile-key"><span><i class="key-sheet"></i>FORM</span><span><i class="key-reference"></i>OBJ RELIEF</span></div>
+        </div>
         <div class="metric-group"><h2>01 / INPUT</h2>
           <div class="metric"><span>Reference</span><strong id="stat-source">Loading…</strong></div>
           <div class="metric"><span>OBJ vertices</span><strong id="stat-vertices">—</strong></div>
